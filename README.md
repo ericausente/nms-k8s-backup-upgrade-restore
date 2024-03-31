@@ -163,13 +163,15 @@ nms-license DQlite information collected
 ####
 Archive /mnt/c/Users/ausente/Downloads/nms/charts/nms-hybrid/backup-restore/k8s-backup-1710847841.tar.gz ready
 ```
+
 4. Use Helm to upgrade the NGINX Management Suite deployment, specifying the path to your values.yaml file and setting any necessary parameters, such as the admin password hash.
 
 To upgrade Instance Manager, take the following steps:
-        1. Download Helm Package  -  Go to the MyF5 website, then select Resources > Downloads.
-        2. Load Docker Images     - https://github.com/ericausente/nms-acm-on-k8s-via-helm/blob/main/docker-tag-push.sh
-        3. Push Images to Private Docker Registry - - https://github.com/ericausente/nms-acm-on-k8s-via-helm/blob/main/docker-tag-push.sh
-        4. Prepare your yaml file (Configure values.yaml file to pull from your private Docker registry.)
+- A. Download Helm Package  -  Go to the MyF5 website, then select Resources > Downloads.
+- B. Load Docker Images     - https://github.com/ericausente/nms-acm-on-k8s-via-helm/blob/main/docker-tag-push.sh
+- C. Push Images to Private Docker Registry - - https://github.com/ericausente/nms-acm-on-k8s-via-helm/blob/main/docker-tag-push.sh
+- D. Prepare your yaml file (Configure values.yaml file to pull from your private Docker registry.)
+
 ```
 # values.yaml
 global:
