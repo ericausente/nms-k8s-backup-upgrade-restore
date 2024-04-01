@@ -7,6 +7,7 @@ Personal note on approach to upgrading the NGINX Management Suite (NMS) and NGIN
 Before proceeding with the upgrade, ensure the following conditions are met:
 
 - Confirm root access to the Kubernetes cluster where NMS is installed.
+- Helm 3.10.0 or later 	https://helm.sh/docs/intro/install/
 -  Verify the installed versions of NGINX Management Suite and Instance Manager.
 - SQLite Configuration: Check that SQLite is installed and properly configured according to the NGINX documentation https://docs.nginx.com/nginx-management-suite/admin-guides/maintenance/sqlite-installation/.
 -  Ensure Helm is installed and configured for your Kubernetes cluster.
