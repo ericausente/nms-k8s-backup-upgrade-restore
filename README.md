@@ -274,5 +274,180 @@ ingestion      ClusterIP      10.0.194.159   <none>         8035/TCP            
 integrations   ClusterIP      10.0.237.189   <none>         8037/TCP                     4d6h
 
 ```
-   
+
 8. Upgrade NGINX Agent
+
+
+
+# Using the Restoration Script in AKS
+
+Utility pod has to be scheduled on the nodes where the PVs which the NMS Components are in use.  
+Given the error message from the initial kubectl describe pod command indicating a "volume node affinity conflict" (for our utility pod), I’ve identified a requirement to adjust the PV and PVCs used. 
+It appears we need to ensure all necessary PVs are accessible within a single Azure zone where the node resides. 
+This task presents challenges, especially if the data on these PVs is actively in use and tied to specific zones.
+
+Please note that this situation isn't managed by NGINX but falls under the purview of AKS maintainers. 
+
+As a best effort, in my lab tests and through insights gathered from Azure documentation and community forums, I found that creating a new Storage Class specific to a single zone (westus2-2 in my case) was a necessary step. 
+Below is the configuration used for the Storage Class, named single-zone-storage-class: 
+```
+# cat sc.yaml
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: single-zone-storage-class
+provisioner: kubernetes.io/azure-disk
+parameters:
+  skuName: Premium_LRS
+  location: westus2
+  # Set this to true for single-zone or remove for multi-zone
+  zoned: "true"
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: failure-domain.beta.kubernetes.io/zone
+    values:
+    - westus2-2
+```
+
+
+I applied the above Storage Class and adjusted our helm deployment to utilize it.
+This ensured that our utility pod was scheduled correctly within the westus2-2 zone: 
+
+Here's the the values used for my helm install, specifically highlighting the storage class adjustment for some components:
+```
+# cat values.yaml
+# values.yaml
+global:
+    nmsModules:
+        nms-acm:
+            enabled: false
+            configs: []
+            services: []
+        nms-adm:
+            enabled: false
+            configs: []
+            services: []
+nms-hybrid:
+    imagePullSecrets:
+        - name: regcred
+    apigw:
+        image:
+            repository: ausente/nms-apigw
+            tag: 2.12.0
+    core:
+        image:
+            repository: ausente/nms-core
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+    dpm:
+        image:
+            repository: ausente/nms-dpm
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+    ingestion:
+        image:
+            repository: ausente/nms-ingestion
+            tag: 2.12.0
+    integrations:
+        image:
+            repository: ausente/nms-integrations
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+```
+
+After creating some dummy user roles, users, and instance groups within NMS, I initiated a backup using my script. 
+NOTE: Instead of proceeding with the usual uninstall-install cycle, I opted to delete the newly created resources directly from the UI to hasten the process.
+
+Subsequently, I performed a helm upgrade with the below values to ensure the deployment of the utility pod, as shown by the following kubectl command output  below: 
+
+```
+# cat values_sc.yaml
+# values.yaml
+global:
+    utility: true
+    nmsModules:
+        nms-acm:
+            enabled: false
+            configs: []
+            services: []
+        nms-adm:
+            enabled: false
+            configs: []
+            services: []
+nms-hybrid:
+    imagePullSecrets:
+        - name: regcred
+    apigw:
+        image:
+            repository: ausente/nms-apigw
+            tag: 2.12.0
+    core:
+        image:
+            repository: ausente/nms-core
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+    dpm:
+        image:
+            repository: ausente/nms-dpm
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+    ingestion:
+        image:
+            repository: ausente/nms-ingestion
+            tag: 2.12.0
+    integrations:
+        image:
+            repository: ausente/nms-integrations
+            tag: 2.12.0
+        persistence:
+          enabled: true
+          storageClass: single-zone-storage-class
+    utility:
+        image:
+            repository: ausente/utility
+            tag: latest
+```
+
+```
+# kubectl get deployment -n nms
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+apigw          1/1     1            1           22h
+clickhouse     1/1     1            1           22h
+core           1/1     1            1           22h
+dpm            1/1     1            1           22h
+ingestion      1/1     1            1           22h
+integrations   1/1     1            1           22h
+utility        0/0     0            0           22h
+```
+
+
+To prepare for the restoration process, I scaled the utility deployment to 1 replica:
+```
+kubectl -n nms scale deployment/utility --replicas=1
+```
+
+I also ensured the utility pod was scheduled in the desired westus2-2 zone: 
+```
+kubectl patch deployment utility -n nms --type='json' -p='[{"op": "add", "path": "/spec/template/spec/affinity", "value": {"nodeAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": {"nodeSelectorTerms": [{"matchExpressions": [{"key": "topology.kubernetes.io/zone", "operator": "In", "values": ["westus2-2"]}]}]}}}}]'
+```
+
+With the utility pod now correctly scheduled and running, I proceeded to run the restoration script, anticipating a recovery of the NMS configurations and data.
+It was able to restore my instance group list at this point. 
+
+
+
+
+
+
